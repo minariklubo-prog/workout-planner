@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<title>Tréningový plánovač</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #ffffff;
+    --bg2: #f5f5f3;
+    --bg3: #ebebeb;
+    --text: #1a1a18;
+    --text2: #6b6b68;
+    --text3: #a0a09d;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.2);
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a1a;
+      --bg2: #242424;
+      --bg3: #2e2e2e;
+      --text: #f0f0ee;
+      --text2: #9a9a96;
+      --text3: #666662;
+      --border: rgba(255,255,255,0.1);
+      --border2: rgba(255,255,255,0.2);
+    }
+  }
+
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; font-size: 15px; -webkit-text-size-adjust: 100%; }
+
+  .app { max-width: 520px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* Nav */
+  .nav { position: sticky; top: 0; z-index: 100; background: var(--bg); border-bottom: 0.5px solid var(--border); padding: 0 16px; display: flex; gap: 0; }
+  .nav-tab { flex: 1; padding: 14px 4px 12px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; color: var(--text2); border-bottom: 2px solid transparent; transition: all 0.15s; text-align: center; }
+  .nav-tab.active { color: var(--text); border-bottom-color: var(--text); }
+  .nav-tab:disabled { opacity: 0.35; cursor: default; }
+
+  .page { flex: 1; padding: 16px; display: none; }
+  .page.active { display: block; }
+
+  /* Filters */
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .filter-btn { padding: 6px 14px; border-radius: 20px; border: 0.5px solid var(--border2); background: var(--bg); font-size: 13px; cursor: pointer; color: var(--text2); transition: all 0.15s; -webkit-tap-highlight-color: transparent; }
+  .filter-btn.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+  /* Exercise cards */
+  .ex-list { display: flex; flex-direction: column; gap: 6px; }
+  .ex-card { border: 0.5px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--bg); transition: border-color 0.15s; }
+  .ex-card.selected { border-color: var(--border2); }
+  .ex-row { display: flex; align-items: center; gap: 10px; }
+  .ex-name { font-size: 14px; font-weight: 500; flex: 1; line-height: 1.3; }
+  .muscle-tag { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; flex-shrink: 0; }
+  .add-btn { width: 30px; height: 30px; border-radius: 50%; border: 0.5px solid var(--border2); background: none; cursor: pointer; font-size: 20px; line-height: 1; display: flex; align-items: center; justify-content: center; color: var(--text); transition: all 0.15s; flex-shrink: 0; -webkit-tap-highlight-color: transparent; }
+  .add-btn.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+  .params-row { display: flex; gap: 10px; margin-top: 12px; }
+  .param-g { display: flex; flex-direction: column; gap: 4px; }
+  .param-label { font-size: 11px; color: var(--text3); }
+  .param-input { width: 72px; padding: 6px 8px; border: 0.5px solid var(--border2); border-radius: 7px; font-size: 14px; text-align: center; background: var(--bg2); color: var(--text); -webkit-appearance: none; }
+  .param-input:focus { outline: 2px solid var(--text); outline-offset: 1px; }
+
+  /* Selection summary */
+  .sel-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; margin-bottom: 8px; }
+  .sel-title { font-size: 12px; font-weight: 500; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; }
+  .sel-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--border); }
+  .sel-name { font-size: 13px; }
+  .sel-params { font-size: 12px; color: var(--text2); }
+
+  /* Buttons */
+  .btn { display: block; width: 100%; padding: 14px; border-radius: var(--radius); border: none; font-size: 15px; font-weight: 500; cursor: pointer; text-align: center; transition: opacity 0.15s; -webkit-tap-highlight-color: transparent; margin-top: 16px; }
+  .btn-primary { background: var(--text); color: var(--bg); }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-primary:disabled { opacity: 0.3; cursor: default; }
+  .btn-secondary { background: var(--bg2); color: var(--text); }
+
+  /* Preview */
+  .preview-card { border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px; background: var(--bg); margin-bottom: 8px; }
+  .preview-head { display: flex; justify-content: space-between; align-items: flex-start; }
+  .preview-name { font-size: 14px; font-weight: 500; flex: 1; margin-right: 10px; line-height: 1.3; }
+  .preview-params { font-size: 13px; color: var(--text2); margin-top: 3px; }
+  .remove-btn { background: none; border: none; cursor: pointer; font-size: 18px; color: var(--text3); padding: 0 2px; line-height: 1; -webkit-tap-highlight-color: transparent; }
+
+  .setting-card { border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px; background: var(--bg); margin-top: 10px; }
+  .setting-label { font-size: 13px; font-weight: 500; margin-bottom: 10px; }
+  .toggle-row { display: flex; align-items: center; gap: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .toggle-track { width: 36px; height: 20px; border-radius: 10px; background: var(--border2); position: relative; transition: background 0.2s; flex-shrink: 0; }
+  .toggle-track.on { background: var(--text); }
+  .toggle-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; position: absolute; top: 2px; left: 2px; transition: left 0.2s; }
+  .toggle-track.on .toggle-thumb { left: 18px; }
+  .toggle-text { font-size: 13px; color: var(--text2); line-height: 1.4; }
+  .slider-row { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
+  .slider-val { font-size: 14px; font-weight: 500; min-width: 52px; text-align: right; }
+  input[type=range] { flex: 1; height: 4px; accent-color: var(--text); }
+
+  /* Workout */
+  .timer-box { border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px; background: var(--bg); margin-bottom: 14px; }
+  .timer-label { font-size: 12px; color: var(--text3); margin-bottom: 2px; }
+  .timer-display { font-size: 56px; font-weight: 600; letter-spacing: -3px; text-align: center; font-variant-numeric: tabular-nums; line-height: 1; margin: 4px 0; }
+  .timer-bar { height: 3px; border-radius: 2px; background: var(--bg3); margin: 8px 0 12px; overflow: hidden; }
+  .timer-fill { height: 100%; background: var(--text); transition: width 0.1s linear; border-radius: 2px; }
+  .timer-btns { display: flex; gap: 8px; }
+  .t-btn { flex: 1; padding: 11px 8px; border-radius: 8px; border: 0.5px solid var(--border2); background: var(--bg2); font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text); transition: opacity 0.15s; -webkit-tap-highlight-color: transparent; }
+  .t-btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+  .step-list { display: flex; flex-direction: column; gap: 6px; }
+  .step-card { border: 0.5px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--bg); transition: all 0.2s; }
+  .step-card.active { border-color: var(--text); border-width: 1.5px; }
+  .step-card.done { opacity: 0.35; }
+  .step-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .step-name { font-size: 14px; font-weight: 500; flex: 1; line-height: 1.3; }
+  .step-info { font-size: 13px; color: var(--text2); margin-top: 3px; }
+  .step-badge { font-size: 12px; padding: 3px 9px; border-radius: 20px; font-weight: 500; }
+  .step-badge.done-b { background: var(--bg3); color: var(--text3); }
+  .step-badge.active-b { background: var(--text); color: var(--bg); }
+
+  .done-screen { text-align: center; padding: 60px 16px; }
+  .done-emoji { font-size: 60px; margin-bottom: 16px; }
+  .done-title { font-size: 26px; font-weight: 600; margin-bottom: 8px; }
+  .done-sub { font-size: 15px; color: var(--text2); }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav">
+    <button class="nav-tab active" id="tab-plan" onclick="setView('plan')">Výber</button>
+    <button class="nav-tab" id="tab-preview" onclick="setView('preview')" disabled>Náhľad</button>
+    <button class="nav-tab" id="tab-workout" onclick="setView('workout')" disabled>Tréning</button>
+  </nav>
+
+  <div class="page active" id="page-plan"></div>
+  <div class="page" id="page-preview"></div>
+  <div class="page" id="page-workout"></div>
+</div>
+
+<script>
+const EXERCISES = [
+  { id:1,  name:'Biceps jč naklonená lavička', muscle:'biceps' },
+  { id:2,  name:'Obojručný zdvih jč',          muscle:'biceps' },
+  { id:3,  name:'Strict curl',                  muscle:'biceps' },
+  { id:4,  name:'Chin ups',                     muscle:'biceps' },
+  { id:5,  name:'Kladivové zvihy',              muscle:'biceps' },
+  { id:6,  name:'Predpažovanie',                muscle:'ramená' },
+  { id:7,  name:'Ropažovanie v opore lavičky',  muscle:'ramená' },
+  { id:8,  name:'Lopakové kliky',               muscle:'ramená' },
+  { id:9,  name:'Zadné ramená belt (reverse fly)', muscle:'ramená' },
+  { id:10, name:'Lateral raises belt',          muscle:'ramená' },
+  { id:11, name:'Triceps jč za hlavou',          muscle:'triceps' },
+  { id:12, name:'Kick-back',                    muscle:'triceps' },
+  { id:13, name:'Sťahovanie beltu',             muscle:'triceps' },
+  { id:14, name:'Triceps EZ',                   muscle:'triceps' },
+  { id:15, name:'Drepy vč',                     muscle:'spodok' },
+  { id:16, name:'Goblet squats',                muscle:'spodok' },
+  { id:17, name:'Lunges',                       muscle:'spodok' },
+  { id:18, name:'Jump squats',                  muscle:'spodok' },
+  { id:19, name:'Dead lift',                    muscle:'spodok' },
+  { id:20, name:'Single leg deadlift',          muscle:'spodok' },
+  { id:21, name:'Leg curls',                    muscle:'spodok' },
+  { id:22, name:'Dumbbell side bend',           muscle:'spodok' },
+  { id:23, name:'Bench press',                  muscle:'hrudník' },
+  { id:24, name:'Bench jč',                     muscle:'hrudník' },
+  { id:25, name:'Incline bench jč',             muscle:'hrudník' },
+  { id:26, name:'Chest Squeeze Press',          muscle:'hrudník' },
+  { id:27, name:'Belt flies v stoji',           muscle:'hrudník' },
+  { id:28, name:'Príťahy vč s oporou lavičky',  muscle:'chrbát' },
+  { id:29, name:'Swimmers',                     muscle:'chrbát' },
+  { id:30, name:'Face pulls',                   muscle:'chrbát' },
+  { id:31, name:'Príťahy jč s oporou lavičky',  muscle:'chrbát' },
+];
+
+const MUSCLES = ['všetko','biceps','triceps','ramená','hrudník','chrbát','spodok'];
+const MUSCLE_LABELS = { 'všetko':'Všetko','biceps':'Biceps','triceps':'Triceps','ramená':'Ramená','hrudník':'Hrudník','chrbát':'Chrbát','spodok':'Spodok' };
+const MUSCLE_BG   = { biceps:'#E1F5EE', triceps:'#EEEDFE', ramená:'#FAECE7', spodok:'#EAF3DE', hrudník:'#E6F1FB', chrbát:'#FAEEDA' };
+const MUSCLE_COL  = { biceps:'#0F6E56', triceps:'#534AB7', ramená:'#993C1D', spodok:'#3B6D11', hrudník:'#185FA5', chrbát:'#854F0B' };
+
+const S = {
+  view: 'plan',
+  filter: 'všetko',
+  selected: [],
+  params: {},
+  interleave: false,
+  restSec: 60,
+  steps: [],
+  stepIdx: 0,
+  timerLeft: 0,
+  timerTotal: 0,
+  timerRunning: false,
+  done: false,
+};
+
+let timerIv = null;
+
+/* ---------- Storage ---------- */
+function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
+
+function loadState() {
+  S.params   = lsGet('wp_params', {});
+  S.selected = lsGet('wp_sel', []);
+  S.restSec  = lsGet('wp_rest', 60);
+  S.interleave = lsGet('wp_il', false);
+}
+
+function saveParams()   { lsSet('wp_params', S.params); }
+function saveSel()      { lsSet('wp_sel', S.selected); }
+function saveSettings() { lsSet('wp_rest', S.restSec); lsSet('wp_il', S.interleave); }
+
+/* ---------- Param helpers ---------- */
+function gp(id, k, d) { return S.params[id] && S.params[id][k] !== undefined ? S.params[id][k] : d; }
+function sp(id, k, v) { if (!S.params[id]) S.params[id] = {}; S.params[id][k] = v; saveParams(); }
+
+/* ---------- Build steps ---------- */
+function buildSteps() {
+  if (!S.interleave) {
+    const out = [];
+    S.selected.forEach(id => {
+      const ex = EXERCISES.find(e => e.id === id);
+      const sets = +gp(id,'sets',3);
+      for (let s = 1; s <= sets; s++)
+        out.push({ id, name: ex.name, muscle: ex.muscle, s, sets, weight: gp(id,'weight',0), reps: gp(id,'reps',10) });
+    });
+    return out;
+  }
+  const byMuscle = {};
+  S.selected.forEach(id => {
+    const ex = EXERCISES.find(e => e.id === id);
+    (byMuscle[ex.muscle] = byMuscle[ex.muscle] || []).push({ id, ex });
+  });
+  const queues = Object.values(byMuscle).map(grp => {
+    const q = [];
+    grp.forEach(({id, ex}) => {
+      const sets = +gp(id,'sets',3);
+      for (let s = 1; s <= sets; s++)
+        q.push({ id, name: ex.name, muscle: ex.muscle, s, sets, weight: gp(id,'weight',0), reps: gp(id,'reps',10) });
+    });
+    return q;
+  });
+  const out = [];
+  const maxLen = Math.max(...queues.map(q => q.length));
+  for (let i = 0; i < maxLen; i++) queues.forEach(q => { if (q[i]) out.push(q[i]); });
+  return out;
+}
+
+/* ---------- Timer ---------- */
+function startTimer() {
+  stopTimer();
+  S.timerTotal = S.restSec;
+  S.timerLeft  = S.restSec;
+  S.timerRunning = true;
+  timerIv = setInterval(() => {
+    S.timerLeft--;
+    if (S.timerLeft <= 0) { stopTimer(); }
+    renderWorkout();
+  }, 1000);
+  renderWorkout();
+}
+function pauseTimer() { if (timerIv) { clearInterval(timerIv); timerIv = null; } S.timerRunning = false; renderWorkout(); }
+function stopTimer()  { pauseTimer(); }
+function nextStep() {
+  stopTimer();
+  const next = S.stepIdx + 1;
+  if (next >= S.steps.length) { S.done = true; renderWorkout(); }
+  else { S.stepIdx = next; if (S.restSec > 0) startTimer(); else renderWorkout(); }
+}
+
+/* ---------- View switching ---------- */
+function setView(v) {
+  S.view = v;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + v).classList.add('active');
+  document.getElementById('tab-' + v).classList.add('active');
+  if (v === 'plan') renderPlan();
+  if (v === 'preview') renderPreview();
+  if (v === 'workout') renderWorkout();
+}
+function updateTabs() {
+  document.getElementById('tab-preview').disabled = S.selected.length === 0;
+  document.getElementById('tab-workout').disabled = S.steps.length === 0;
+}
+
+/* ---------- Render: Plan ---------- */
+function renderPlan() {
+  const filtered = S.filter === 'všetko' ? EXERCISES : EXERCISES.filter(e => e.muscle === S.filter);
+  const selSet = new Set(S.selected);
+  const el = document.getElementById('page-plan');
+
+  const filters = `<div class="filters">${MUSCLES.map(m =>
+    `<button class="filter-btn${S.filter===m?' active':''}" onclick="setFilter('${m}')">${MUSCLE_LABELS[m]}</button>`
+  ).join('')}</div>`;
+
+  const cards = filtered.map(ex => {
+    const on = selSet.has(ex.id);
+    const params = on ? `
+      <div class="params-row">
+        <div class="param-g"><span class="param-label">Váha (kg)</span>
+          <input class="param-input" type="number" inputmode="decimal" min="0" step="0.5" value="${gp(ex.id,'weight',0)}" onchange="updateParam(${ex.id},'weight',+this.value)"></div>
+        <div class="param-g"><span class="param-label">Série</span>
+          <input class="param-input" type="number" inputmode="numeric" min="1" max="20" value="${gp(ex.id,'sets',3)}" onchange="updateParam(${ex.id},'sets',+this.value)"></div>
+        <div class="param-g"><span class="param-label">Opakovania</span>
+          <input class="param-input" type="number" inputmode="numeric" min="1" max="100" value="${gp(ex.id,'reps',10)}" onchange="updateParam(${ex.id},'reps',+this.value)"></div>
+      </div>` : '';
+    return `<div class="ex-card${on?' selected':''}">
+      <div class="ex-row">
+        <span class="ex-name">${ex.name}</span>
+        <span class="muscle-tag" style="background:${MUSCLE_BG[ex.muscle]||'#eee'};color:${MUSCLE_COL[ex.muscle]||'#666'}">${ex.muscle}</span>
+        <button class="add-btn${on?' on':''}" onclick="toggleSel(${ex.id})">${on?'✓':'+'}</button>
+      </div>${params}
+    </div>`;
+  }).join('');
+
+  let summary = '';
+  if (S.selected.length) {
+    const rows = S.selected.map(id => {
+      const ex = EXERCISES.find(e => e.id === id);
+      return `<div class="sel-item"><span class="sel-name">${ex.name}</span>
+        <span class="sel-params">${gp(id,'weight',0)}kg · ${gp(id,'sets',3)}× · ${gp(id,'reps',10)}rep</span></div>`;
+    }).join('');
+    summary = `<div class="sel-header">
+        <span class="sel-title">Zvolené (${S.selected.length})</span>
+      </div>${rows}
+      <button class="btn btn-primary" onclick="goPreview()">Náhľad tréninku →</button>`;
+  }
+
+  el.innerHTML = filters + `<div class="ex-list">${cards}</div>` + summary;
+}
+
+/* ---------- Render: Preview ---------- */
+function renderPreview() {
+  const el = document.getElementById('page-preview');
+  const hasMulti = new Set(S.selected.map(id => EXERCISES.find(e=>e.id===id).muscle)).size > 1;
+
+  const cards = S.selected.map(id => {
+    const ex = EXERCISES.find(e => e.id === id);
+    return `<div class="preview-card">
+      <div class="preview-head">
+        <div>
+          <div class="preview-name">${ex.name}</div>
+          <div class="preview-params">${gp(id,'weight',0)} kg · ${gp(id,'sets',3)} série · ${gp(id,'reps',10)} opakovaní</div>
+        </div>
+        <button class="remove-btn" onclick="removeSel(${id})">✕</button>
+      </div>
+      <span class="muscle-tag" style="display:inline-block;margin-top:8px;background:${MUSCLE_BG[ex.muscle]||'#eee'};color:${MUSCLE_COL[ex.muscle]||'#666'}">${ex.muscle}</span>
+    </div>`;
+  }).join('');
+
+  const interleaveCard = hasMulti ? `
+    <div class="setting-card">
+      <div class="toggle-row" onclick="toggleInterleave()">
+        <div class="toggle-track${S.interleave?' on':''}"><div class="toggle-thumb"></div></div>
+        <span class="toggle-text">Striedať partie (biceps → triceps → biceps…)</span>
+      </div>
+    </div>` : '';
+
+  const timerCard = `
+    <div class="setting-card">
+      <div class="setting-label">Prestávka medzi sériami</div>
+      <div class="slider-row">
+        <input type="range" min="0" max="300" step="5" value="${S.restSec}"
+          oninput="S.restSec=+this.value; saveSettings(); document.getElementById('rest-val').textContent=S.restSec===0?'žiadna':S.restSec+'s'">
+        <span class="slider-val" id="rest-val">${S.restSec===0?'žiadna':S.restSec+'s'}</span>
+      </div>
+    </div>`;
+
+  el.innerHTML = cards + interleaveCard + timerCard +
+    `<button class="btn btn-primary" onclick="startWorkout()">Začať tréning 💪</button>`;
+}
+
+/* ---------- Render: Workout ---------- */
+function renderWorkout() {
+  const el = document.getElementById('page-workout');
+  if (S.done) {
+    el.innerHTML = `<div class="done-screen">
+      <div class="done-emoji">💪</div>
+      <div class="done-title">Tréning dokončený!</div>
+      <div class="done-sub">${S.steps.length} sérií · skvelá robota</div>
+      <button class="btn btn-primary" style="max-width:200px;margin:2rem auto" onclick="resetAll()">Nový tréning</button>
+    </div>`;
+    return;
+  }
+  if (!S.steps.length) { el.innerHTML = ''; return; }
+
+  const pct = S.timerTotal > 0 ? Math.round((S.timerTotal - S.timerLeft) / S.timerTotal * 100) : (S.timerRunning ? 0 : 100);
+  const m = Math.floor(S.timerLeft / 60), s = S.timerLeft % 60;
+  const timeStr = S.timerRunning ? (m > 0 ? m+'m ' : '') + s + 's' : S.restSec + 's';
+
+  const timerHtml = S.restSec > 0 ? `
+    <div class="timer-box">
+      <div class="timer-label">Prestávka</div>
+      <div class="timer-display">${timeStr}</div>
+      <div class="timer-bar"><div class="timer-fill" id="tfill" style="width:${pct}%"></div></div>
+      <div class="timer-btns">
+        <button class="t-btn" onclick="startTimer()">${S.timerRunning?'Reštart':'Spustiť'}</button>
+        ${S.timerRunning ? `<button class="t-btn" onclick="pauseTimer()">Pauza</button>` : ''}
+        <button class="t-btn primary" onclick="nextStep()">${S.stepIdx>=S.steps.length-1?'Dokončiť ✓':'Ďalej →'}</button>
+      </div>
+    </div>` : `<div style="text-align:right;margin-bottom:12px">
+      <button class="t-btn primary" style="display:inline-block;padding:12px 24px;border-radius:8px" onclick="nextStep()">${S.stepIdx>=S.steps.length-1?'Dokončiť ✓':'Ďalej →'}</button>
+    </div>`;
+
+  const stepCards = S.steps.map((step, i) => {
+    const isDone = i < S.stepIdx, isActive = i === S.stepIdx;
+    let badge = '';
+    if (isDone) badge = `<span class="step-badge done-b">✓</span>`;
+    else if (isActive) badge = `<span class="step-badge active-b">▶ aktívne</span>`;
+    else badge = `<span class="step-badge" style="background:${MUSCLE_BG[step.muscle]||'#eee'};color:${MUSCLE_COL[step.muscle]||'#666'}">${step.muscle}</span>`;
+    return `<div class="step-card${isActive?' active':''}${isDone?' done':''}">
+      <div class="step-head">
+        <div>
+          <div class="step-name">${step.name}</div>
+          <div class="step-info">${step.weight}kg · séria ${step.s}/${step.sets} · ${step.reps} op.</div>
+        </div>${badge}
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = timerHtml + `<div class="step-list">${stepCards}</div>`;
+  
+  /* scroll active step into view */
+  setTimeout(() => {
+    const cards = el.querySelectorAll('.step-card');
+    if (cards[S.stepIdx]) cards[S.stepIdx].scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }, 50);
+}
+
+/* ---------- Actions ---------- */
+function setFilter(m) { S.filter = m; renderPlan(); }
+
+function toggleSel(id) {
+  if (S.selected.includes(id)) S.selected = S.selected.filter(x => x !== id);
+  else S.selected.push(id);
+  saveSel(); updateTabs(); renderPlan();
+}
+function updateParam(id, k, v) { sp(id, k, v); }
+function removeSel(id) {
+  S.selected = S.selected.filter(x => x !== id);
+  saveSel(); updateTabs();
+  if (S.selected.length === 0) setView('plan');
+  else renderPreview();
+}
+
+function goPreview() { setView('preview'); }
+function toggleInterleave() { S.interleave = !S.interleave; saveSettings(); renderPreview(); }
+
+function startWorkout() {
+  S.steps = buildSteps(); S.stepIdx = 0; S.done = false;
+  stopTimer(); S.timerLeft = 0; S.timerRunning = false;
+  updateTabs(); setView('workout');
+  if (S.restSec > 0) startTimer();
+}
+
+function resetAll() {
+  stopTimer();
+  S.selected = []; S.steps = []; S.stepIdx = 0; S.done = false;
+  S.interleave = false;
+  saveSel(); updateTabs(); setView('plan');
+}
+
+/* ---------- Boot ---------- */
+loadState();
+updateTabs();
+renderPlan();
+</script>
+</body>
+</html>
