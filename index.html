@@ -102,14 +102,24 @@
   .slider-val { font-size: 14px; font-weight: 500; min-width: 52px; text-align: right; }
   input[type=range] { flex: 1; height: 4px; accent-color: var(--text); }
 
-  /* Workout */
-  .timer-box { border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px; background: var(--bg); margin-bottom: 14px; }
-  .timer-label { font-size: 12px; color: var(--text3); margin-bottom: 2px; }
-  .timer-display { font-size: 56px; font-weight: 600; letter-spacing: -3px; text-align: center; font-variant-numeric: tabular-nums; line-height: 1; margin: 4px 0; }
-  .timer-bar { height: 3px; border-radius: 2px; background: var(--bg3); margin: 8px 0 12px; overflow: hidden; }
+  /* Workout layout — sticky timer + scrollable list */
+  #page-workout { padding: 0 !important; flex-direction: column; height: calc(100vh - 49px); overflow: hidden; }
+  #page-workout.active { display: flex !important; }
+  .workout-sticky { background: var(--bg); border-bottom: 0.5px solid var(--border); padding: 12px 16px; flex-shrink: 0; }
+  .workout-scroll { flex: 1; overflow-y: auto; padding: 12px 16px 40px; -webkit-overflow-scrolling: touch; }
+
+  /* Timer */
+  .timer-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .timer-top { display: flex; align-items: center; gap: 12px; }
+  .timer-left-col { display: flex; flex-direction: column; gap: 0; }
+  .timer-display { font-size: 48px; font-weight: 600; letter-spacing: -2px; font-variant-numeric: tabular-nums; line-height: 1; }
+  .current-pill { background: var(--bg2); border-radius: 8px; padding: 8px 12px; flex: 1; min-width: 0; }
+  .current-pill-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .current-pill-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .timer-bar { height: 3px; border-radius: 2px; background: var(--bg3); margin: 8px 0 10px; overflow: hidden; }
   .timer-fill { height: 100%; background: var(--text); transition: width 0.1s linear; border-radius: 2px; }
   .timer-btns { display: flex; gap: 8px; }
-  .t-btn { flex: 1; padding: 11px 8px; border-radius: 8px; border: 0.5px solid var(--border2); background: var(--bg2); font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text); transition: opacity 0.15s; -webkit-tap-highlight-color: transparent; }
+  .t-btn { flex: 1; padding: 10px 8px; border-radius: 8px; border: 0.5px solid var(--border2); background: var(--bg2); font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text); transition: opacity 0.15s; -webkit-tap-highlight-color: transparent; }
   .t-btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
 
   .step-list { display: flex; flex-direction: column; gap: 6px; }
@@ -127,6 +137,13 @@
   .done-emoji { font-size: 60px; margin-bottom: 16px; }
   .done-title { font-size: 26px; font-weight: 600; margin-bottom: 8px; }
   .done-sub { font-size: 15px; color: var(--text2); }
+
+  /* Drag-and-drop */
+  .drag-handle { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; cursor: grab; color: var(--text3); flex-shrink: 0; touch-action: none; font-size: 16px; }
+  .drag-handle:active { cursor: grabbing; }
+  .preview-card { transition: box-shadow 0.15s, opacity 0.15s, transform 0.15s; }
+  .preview-card.dragging { opacity: 0.5; box-shadow: 0 8px 24px rgba(0,0,0,0.15); transform: scale(1.02); z-index: 10; position: relative; }
+  .preview-card.drag-over { border-color: var(--text); border-width: 1.5px; }
 </style>
 </head>
 <body>
@@ -224,9 +241,9 @@ function buildSteps() {
     const out = [];
     S.selected.forEach(id => {
       const ex = EXERCISES.find(e => e.id === id);
-      const sets = +gp(id,'sets',3);
+      const sets = +gp(id,'sets',4);
       for (let s = 1; s <= sets; s++)
-        out.push({ id, name: ex.name, muscle: ex.muscle, s, sets, weight: gp(id,'weight',0), reps: gp(id,'reps',10) });
+        out.push({ id, name: ex.name, muscle: ex.muscle, s, sets, weight: gp(id,'weight',''), reps: gp(id,'reps',8) });
     });
     return out;
   }
@@ -238,9 +255,9 @@ function buildSteps() {
   const queues = Object.values(byMuscle).map(grp => {
     const q = [];
     grp.forEach(({id, ex}) => {
-      const sets = +gp(id,'sets',3);
+      const sets = +gp(id,'sets',4);
       for (let s = 1; s <= sets; s++)
-        q.push({ id, name: ex.name, muscle: ex.muscle, s, sets, weight: gp(id,'weight',0), reps: gp(id,'reps',10) });
+        q.push({ id, name: ex.name, muscle: ex.muscle, s, sets, weight: gp(id,'weight',''), reps: gp(id,'reps',8) });
     });
     return q;
   });
@@ -252,24 +269,40 @@ function buildSteps() {
 
 /* ---------- Timer ---------- */
 function startTimer() {
-  stopTimer();
+  if (timerIv) { clearInterval(timerIv); timerIv = null; }
   S.timerTotal = S.restSec;
   S.timerLeft  = S.restSec;
   S.timerRunning = true;
   timerIv = setInterval(() => {
     S.timerLeft--;
     if (S.timerLeft <= 0) { stopTimer(); }
-    renderWorkout();
+    else renderWorkout();
   }, 1000);
   renderWorkout();
 }
 function pauseTimer() { if (timerIv) { clearInterval(timerIv); timerIv = null; } S.timerRunning = false; renderWorkout(); }
 function stopTimer()  { pauseTimer(); }
+function toggleTimer() {
+  if (S.timerRunning) { pauseTimer(); }
+  else {
+    if (S.timerLeft <= 0) { S.timerLeft = S.restSec; S.timerTotal = S.restSec; }
+    S.timerRunning = true;
+    timerIv = setInterval(() => {
+      S.timerLeft--;
+      if (S.timerLeft <= 0) { stopTimer(); }
+      else renderWorkout();
+    }, 1000);
+    renderWorkout();
+  }
+}
+function resetTimerOnly() { stopTimer(); S.timerLeft = S.restSec; S.timerTotal = S.restSec; renderWorkout(); }
 function nextStep() {
   stopTimer();
+  S.timerLeft = S.restSec;
+  S.timerTotal = S.restSec;
   const next = S.stepIdx + 1;
   if (next >= S.steps.length) { S.done = true; renderWorkout(); }
-  else { S.stepIdx = next; if (S.restSec > 0) startTimer(); else renderWorkout(); }
+  else { S.stepIdx = next; renderWorkout(); }
 }
 
 /* ---------- View switching ---------- */
@@ -303,11 +336,11 @@ function renderPlan() {
     const params = on ? `
       <div class="params-row">
         <div class="param-g"><span class="param-label">Váha (kg)</span>
-          <input class="param-input" type="number" inputmode="decimal" min="0" step="0.5" value="${gp(ex.id,'weight',0)}" onchange="updateParam(${ex.id},'weight',+this.value)"></div>
+          <input class="param-input" type="number" inputmode="decimal" min="0" step="0.5" placeholder="kg" value="${gp(ex.id,'weight','')}" onchange="updateParam(${ex.id},'weight',this.value===''?'':+this.value)"></div>
         <div class="param-g"><span class="param-label">Série</span>
-          <input class="param-input" type="number" inputmode="numeric" min="1" max="20" value="${gp(ex.id,'sets',3)}" onchange="updateParam(${ex.id},'sets',+this.value)"></div>
+          <input class="param-input" type="number" inputmode="numeric" min="1" max="20" value="${gp(ex.id,'sets',4)}" onchange="updateParam(${ex.id},'sets',+this.value)"></div>
         <div class="param-g"><span class="param-label">Opakovania</span>
-          <input class="param-input" type="number" inputmode="numeric" min="1" max="100" value="${gp(ex.id,'reps',10)}" onchange="updateParam(${ex.id},'reps',+this.value)"></div>
+          <input class="param-input" type="number" inputmode="numeric" min="1" max="100" value="${gp(ex.id,'reps',8)}" onchange="updateParam(${ex.id},'reps',+this.value)"></div>
       </div>` : '';
     return `<div class="ex-card${on?' selected':''}">
       <div class="ex-row">
@@ -323,7 +356,7 @@ function renderPlan() {
     const rows = S.selected.map(id => {
       const ex = EXERCISES.find(e => e.id === id);
       return `<div class="sel-item"><span class="sel-name">${ex.name}</span>
-        <span class="sel-params">${gp(id,'weight',0)}kg · ${gp(id,'sets',3)}× · ${gp(id,'reps',10)}rep</span></div>`;
+        <span class="sel-params">${gp(id,'weight','')!==''?gp(id,'weight','')+'kg · ':''}${gp(id,'sets',4)}× · ${gp(id,'reps',8)}rep</span></div>`;
     }).join('');
     summary = `<div class="sel-header">
         <span class="sel-title">Zvolené (${S.selected.length})</span>
@@ -341,11 +374,12 @@ function renderPreview() {
 
   const cards = S.selected.map(id => {
     const ex = EXERCISES.find(e => e.id === id);
-    return `<div class="preview-card">
+    return `<div class="preview-card" data-id="${id}">
       <div class="preview-head">
-        <div>
+        <div class="drag-handle" title="Presunúť">⠿</div>
+        <div style="flex:1;min-width:0">
           <div class="preview-name">${ex.name}</div>
-          <div class="preview-params">${gp(id,'weight',0)} kg · ${gp(id,'sets',3)} série · ${gp(id,'reps',10)} opakovaní</div>
+          <div class="preview-params">${gp(id,'weight','') !== '' ? gp(id,'weight','') + ' kg · ' : ''}${gp(id,'sets',4)} série · ${gp(id,'reps',8)} opakovaní</div>
         </div>
         <button class="remove-btn" onclick="removeSel(${id})">✕</button>
       </div>
@@ -371,64 +405,176 @@ function renderPreview() {
       </div>
     </div>`;
 
-  el.innerHTML = cards + interleaveCard + timerCard +
+  el.innerHTML = `<div id="drag-list">${cards}</div>` + interleaveCard + timerCard +
     `<button class="btn btn-primary" onclick="startWorkout()">Začať tréning 💪</button>`;
+
+  initDrag();
+}
+
+/* ---------- Drag & drop (mouse + touch) ---------- */
+function initDrag() {
+  const list = document.getElementById('drag-list');
+  if (!list) return;
+  let dragged = null, placeholder = null, startY = 0, startIdx = 0;
+
+  function getCards() { return [...list.querySelectorAll('.preview-card:not(.drag-placeholder)')]; }
+
+  function cardAt(y) {
+    const cards = getCards();
+    for (let i = 0; i < cards.length; i++) {
+      const r = cards[i].getBoundingClientRect();
+      if (y < r.top + r.height / 2) return i;
+    }
+    return cards.length;
+  }
+
+  function onMove(clientY) {
+    if (!dragged) return;
+    dragged.style.top = (clientY - startY) + 'px';
+    const idx = cardAt(clientY);
+    const cards = getCards();
+    if (idx >= cards.length) list.appendChild(placeholder);
+    else if (cards[idx] !== placeholder) list.insertBefore(placeholder, cards[idx]);
+  }
+
+  function onEnd() {
+    if (!dragged) return;
+    dragged.classList.remove('dragging');
+    dragged.style.position = '';
+    dragged.style.top = '';
+    dragged.style.width = '';
+    dragged.style.zIndex = '';
+    // rebuild selected order from DOM
+    const newOrder = [...list.querySelectorAll('.preview-card[data-id]')].map(c => +c.dataset.id);
+    // insert dragged at placeholder position
+    list.insertBefore(dragged, placeholder);
+    placeholder.remove();
+    S.selected = [...list.querySelectorAll('.preview-card[data-id]')].map(c => +c.dataset.id);
+    saveSel();
+    dragged = null; placeholder = null;
+    renderPreview();
+  }
+
+  list.querySelectorAll('.drag-handle').forEach(handle => {
+    // Mouse
+    handle.addEventListener('mousedown', e => {
+      const card = handle.closest('.preview-card');
+      dragged = card;
+      const rect = card.getBoundingClientRect();
+      startY = e.clientY - rect.top;
+      placeholder = document.createElement('div');
+      placeholder.className = 'preview-card drag-placeholder';
+      placeholder.style.cssText = `height:${rect.height}px;border:1.5px dashed var(--border2);border-radius:var(--radius);background:var(--bg2);margin-bottom:8px;box-sizing:border-box;`;
+      card.style.position = 'fixed';
+      card.style.width = rect.width + 'px';
+      card.style.top = rect.top + 'px';
+      card.style.left = rect.left + 'px';
+      card.style.zIndex = '999';
+      card.classList.add('dragging');
+      list.insertBefore(placeholder, card.nextSibling);
+      e.preventDefault();
+    });
+
+    // Touch
+    handle.addEventListener('touchstart', e => {
+      const card = handle.closest('.preview-card');
+      const touch = e.touches[0];
+      dragged = card;
+      const rect = card.getBoundingClientRect();
+      startY = touch.clientY - rect.top;
+      placeholder = document.createElement('div');
+      placeholder.className = 'preview-card drag-placeholder';
+      placeholder.style.cssText = `height:${rect.height}px;border:1.5px dashed var(--border2);border-radius:var(--radius);background:var(--bg2);margin-bottom:8px;box-sizing:border-box;`;
+      card.style.position = 'fixed';
+      card.style.width = rect.width + 'px';
+      card.style.top = rect.top + 'px';
+      card.style.left = rect.left + 'px';
+      card.style.zIndex = '999';
+      card.classList.add('dragging');
+      list.insertBefore(placeholder, card.nextSibling);
+      e.preventDefault();
+    }, { passive: false });
+  });
+
+  document.addEventListener('mousemove', e => onMove(e.clientY));
+  document.addEventListener('mouseup', onEnd);
+  document.addEventListener('touchmove', e => { if (dragged) { onMove(e.touches[0].clientY); e.preventDefault(); } }, { passive: false });
+  document.addEventListener('touchend', onEnd);
 }
 
 /* ---------- Render: Workout ---------- */
 function renderWorkout() {
   const el = document.getElementById('page-workout');
+
   if (S.done) {
-    el.innerHTML = `<div class="done-screen">
-      <div class="done-emoji">💪</div>
-      <div class="done-title">Tréning dokončený!</div>
-      <div class="done-sub">${S.steps.length} sérií · skvelá robota</div>
-      <button class="btn btn-primary" style="max-width:200px;margin:2rem auto" onclick="resetAll()">Nový tréning</button>
-    </div>`;
+    el.innerHTML = `
+      <div class="workout-scroll">
+        <div class="done-screen">
+          <div class="done-emoji">💪</div>
+          <div class="done-title">Tréning dokončený!</div>
+          <div class="done-sub">${S.steps.length} sérií · skvelá robota</div>
+          <button class="btn btn-primary" style="max-width:200px;margin:2rem auto" onclick="resetAll()">Nový tréning</button>
+        </div>
+      </div>`;
     return;
   }
   if (!S.steps.length) { el.innerHTML = ''; return; }
 
-  const pct = S.timerTotal > 0 ? Math.round((S.timerTotal - S.timerLeft) / S.timerTotal * 100) : (S.timerRunning ? 0 : 100);
-  const m = Math.floor(S.timerLeft / 60), s = S.timerLeft % 60;
-  const timeStr = S.timerRunning ? (m > 0 ? m+'m ' : '') + s + 's' : S.restSec + 's';
+  const step = S.steps[S.stepIdx];
+  const pct = (S.timerRunning || S.timerLeft > 0) && S.timerTotal > 0
+    ? Math.round((S.timerTotal - S.timerLeft) / S.timerTotal * 100)
+    : 0;
+  const m = Math.floor(S.timerLeft / 60), sec = S.timerLeft % 60;
+  const timeStr = S.timerRunning || S.timerLeft > 0
+    ? (m > 0 ? m + ':' + String(sec).padStart(2,'0') : sec + 's')
+    : (S.restSec > 0 ? S.restSec + 's' : '—');
 
-  const timerHtml = S.restSec > 0 ? `
-    <div class="timer-box">
-      <div class="timer-label">Prestávka</div>
-      <div class="timer-display">${timeStr}</div>
-      <div class="timer-bar"><div class="timer-fill" id="tfill" style="width:${pct}%"></div></div>
-      <div class="timer-btns">
-        <button class="t-btn" onclick="startTimer()">${S.timerRunning?'Reštart':'Spustiť'}</button>
-        ${S.timerRunning ? `<button class="t-btn" onclick="pauseTimer()">Pauza</button>` : ''}
-        <button class="t-btn primary" onclick="nextStep()">${S.stepIdx>=S.steps.length-1?'Dokončiť ✓':'Ďalej →'}</button>
+  // Sticky header: timer + current step info + controls
+  const weightStr = step.weight !== '' && step.weight !== undefined ? step.weight + ' kg · ' : '';
+  const stickyHtml = `
+    <div class="workout-sticky">
+      <div class="timer-label">${S.stepIdx + 1} / ${S.steps.length} · Prestávka</div>
+      <div class="timer-top">
+        <div class="timer-left-col">
+          <div class="timer-display">${timeStr}</div>
+        </div>
+        <div class="current-pill">
+          <div class="current-pill-name">${step.name}</div>
+          <div class="current-pill-sub">${weightStr}séria ${step.s}/${step.sets} · ${step.reps} op.</div>
+        </div>
       </div>
-    </div>` : `<div style="text-align:right;margin-bottom:12px">
-      <button class="t-btn primary" style="display:inline-block;padding:12px 24px;border-radius:8px" onclick="nextStep()">${S.stepIdx>=S.steps.length-1?'Dokončiť ✓':'Ďalej →'}</button>
+      ${S.restSec > 0 ? `<div class="timer-bar"><div class="timer-fill" style="width:${pct}%"></div></div>` : '<div style="height:8px"></div>'}
+      <div class="timer-btns">
+        ${S.restSec > 0 ? `<button class="t-btn" onclick="toggleTimer()">${S.timerRunning ? '⏸ Pauza' : '▶ Štart'}</button>` : ''}
+        ${S.restSec > 0 && S.timerRunning ? `<button class="t-btn" onclick="resetTimerOnly()">↺ Reset</button>` : ''}
+        <button class="t-btn primary" onclick="nextStep()">${S.stepIdx >= S.steps.length - 1 ? 'Dokončiť ✓' : 'Ďalej →'}</button>
+      </div>
     </div>`;
 
-  const stepCards = S.steps.map((step, i) => {
+  // Scrollable step list
+  const stepCards = S.steps.map((st, i) => {
     const isDone = i < S.stepIdx, isActive = i === S.stepIdx;
     let badge = '';
     if (isDone) badge = `<span class="step-badge done-b">✓</span>`;
-    else if (isActive) badge = `<span class="step-badge active-b">▶ aktívne</span>`;
-    else badge = `<span class="step-badge" style="background:${MUSCLE_BG[step.muscle]||'#eee'};color:${MUSCLE_COL[step.muscle]||'#666'}">${step.muscle}</span>`;
-    return `<div class="step-card${isActive?' active':''}${isDone?' done':''}">
+    else if (isActive) badge = `<span class="step-badge active-b">▶</span>`;
+    else badge = `<span class="step-badge" style="background:${MUSCLE_BG[st.muscle]||'#eee'};color:${MUSCLE_COL[st.muscle]||'#666'}">${st.muscle}</span>`;
+    const wStr = st.weight !== '' && st.weight !== undefined ? st.weight + ' kg · ' : '';
+    return `<div class="step-card${isActive?' active':''}${isDone?' done':''}" id="sc-${i}">
       <div class="step-head">
         <div>
-          <div class="step-name">${step.name}</div>
-          <div class="step-info">${step.weight}kg · séria ${step.s}/${step.sets} · ${step.reps} op.</div>
+          <div class="step-name">${st.name}</div>
+          <div class="step-info">${wStr}séria ${st.s}/${st.sets} · ${st.reps} op.</div>
         </div>${badge}
       </div>
     </div>`;
   }).join('');
 
-  el.innerHTML = timerHtml + `<div class="step-list">${stepCards}</div>`;
-  
-  /* scroll active step into view */
+  el.innerHTML = stickyHtml + `<div class="workout-scroll"><div class="step-list">${stepCards}</div></div>`;
+
+  // scroll active step into view inside the scrollable div
   setTimeout(() => {
-    const cards = el.querySelectorAll('.step-card');
-    if (cards[S.stepIdx]) cards[S.stepIdx].scrollIntoView({ behavior:'smooth', block:'nearest' });
+    const activeCard = el.querySelector('#sc-' + S.stepIdx);
+    if (activeCard) activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, 50);
 }
 
@@ -453,9 +599,8 @@ function toggleInterleave() { S.interleave = !S.interleave; saveSettings(); rend
 
 function startWorkout() {
   S.steps = buildSteps(); S.stepIdx = 0; S.done = false;
-  stopTimer(); S.timerLeft = 0; S.timerRunning = false;
+  stopTimer(); S.timerLeft = S.restSec; S.timerTotal = S.restSec; S.timerRunning = false;
   updateTabs(); setView('workout');
-  if (S.restSec > 0) startTimer();
 }
 
 function resetAll() {
