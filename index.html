@@ -34,13 +34,13 @@
   .page { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:16px; display:none; min-height:0; }
   .page.active { display:block; }
 
-  /* Workout page: two-zone (sticky top + scrolling list) */
-  #page-workout { flex:1; display:none; flex-direction:column; min-height:0; overflow:hidden; }
+  /* Workout page: always flex column, two zones */
+  #page-workout { flex:1; display:none; flex-direction:column; min-height:0; }
   #page-workout.active { display:flex; }
   .wo-top { flex-shrink:0; background:var(--bg); border-bottom:0.5px solid var(--border); padding:12px 16px; }
   .wo-scroll { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 16px 40px; min-height:0; }
-  /* pre-start uses normal scroll */
-  .wo-prestart-wrap { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:16px; min-height:0; }
+  /* pre-start: full scrollable area */
+  .wo-pre-scroll { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:14px 16px 32px; min-height:0; }
 
   /* Filters */
   .filters { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
@@ -187,7 +187,7 @@ const MCOL={biceps:'#0F6E56',triceps:'#534AB7',ramená:'#993C1D',spodok:'#3B6D11
 const S={
   view:'plan', filter:'všetko',
   selected:[], params:{},
-  interleave:false, restSec:60,
+  interleave:false, restSec:120,
   steps:[], stepIdx:0,
   timerLeft:0, timerTotal:0, timerRunning:false,
   started:false, done:false,
@@ -197,7 +197,7 @@ let _iv=null;
 /* ── STORAGE ─────────────────────────────────────── */
 const lsG=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}};
 const lsS=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
-function loadState(){S.params=lsG('wp_p',{});S.selected=lsG('wp_s',[]);S.restSec=lsG('wp_r',60);S.interleave=lsG('wp_i',false);}
+function loadState(){S.params=lsG('wp_p',{});S.selected=lsG('wp_s',[]);S.restSec=lsG('wp_r',120);S.interleave=lsG('wp_i',false);}
 const svP=()=>lsS('wp_p',S.params);
 const svS=()=>lsS('wp_s',S.selected);
 const svSet=()=>{lsS('wp_r',S.restSec);lsS('wp_i',S.interleave);};
@@ -336,16 +336,16 @@ function renderPreview(){
 /* ── RENDER WORKOUT ──────────────────────────────── */
 function renderWorkout(){
   const el=document.getElementById('page-workout');
+  el.removeAttribute('style');
+  el.className='active'; // always flex via #page-workout.active
 
   if(S.done){
-    el.className='page active';
-    el.innerHTML=`<div class="done-screen"><div class="done-emoji">💪</div><div class="done-title">Tréning dokončený!</div><div class="done-sub">${S.steps.length} sérií · skvelá robota</div><button class="btn btn-primary" style="max-width:200px;margin:2rem auto" onclick="resetAll()">Nový tréning</button></div>`;
+    el.innerHTML=`<div class="wo-pre-scroll"><div class="done-screen"><div class="done-emoji">💪</div><div class="done-title">Tréning dokončený!</div><div class="done-sub">${S.steps.length} sérií · skvelá robota</div><button class="btn btn-primary" style="max-width:200px;margin:2rem auto" onclick="resetAll()">Nový tréning</button></div></div>`;
     return;
   }
 
   /* PRE-START: drag to reorder + big Start button */
   if(!S.started){
-    el.className='page active';
     const cards=S.steps.map((st,i)=>{
       const w=st.weight!==''&&st.weight!==undefined?st.weight+' kg · ':'';
       return `<div class="drag-card" data-idx="${i}">
@@ -357,7 +357,7 @@ function renderWorkout(){
         </div>
       </div>`;
     }).join('');
-    el.innerHTML=`<div style="padding:0 16px 6px;padding-top:14px">
+    el.innerHTML=`<div class="wo-pre-scroll">
       <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">${S.steps.length} sérií · potiahni pre zmenu poradia</div>
       <div id="wdl">${cards}</div>
       <button class="btn btn-primary" onclick="launchWorkout()">▶ Štart tréning</button>
@@ -367,13 +367,10 @@ function renderWorkout(){
   }
 
   /* ACTIVE WORKOUT */
-  el.className='active';
-  el.style.cssText='display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;';
-
   const step=S.steps[S.stepIdx];
   const pct=S.timerTotal>0?Math.round((S.timerTotal-S.timerLeft)/S.timerTotal*100):0;
-  const m=Math.floor(S.timerLeft/60),s=S.timerLeft%60;
-  const tStr=S.timerLeft>0?(m>0?m+':'+String(s).padStart(2,'0'):s+'s'):(S.restSec>0?S.restSec+'s':'—');
+  const mm=Math.floor(S.timerLeft/60),ss=S.timerLeft%60;
+  const tStr=S.timerLeft>0?(mm>0?mm+':'+String(ss).padStart(2,'0'):ss+'s'):(S.restSec>0?S.restSec+'s':'—');
   const wStr=step.weight!==''&&step.weight!==undefined?step.weight+' kg · ':'';
 
   const stepCards=S.steps.map((st,i)=>{
